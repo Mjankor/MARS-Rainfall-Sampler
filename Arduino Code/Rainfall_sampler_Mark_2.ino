@@ -60,21 +60,25 @@ bool resettoggle = HIGH;//tipping bucket variables
 // Tipping bucket sensor variables
 const byte interruptsensor = 2;
 volatile int tipcounter = 0; 
+long debounceInterval = 50000; //Debouncing Time in microseconds
+volatile unsigned long last_micros = 0;
+volatile bool BucketTipped = false;
 short tips = 0; //used in tippingSensorCheck
-int debounceInterval = 50;
+//int debounceInterval = 50;
 short maxtipcount = 100;// 50; //Determine how many tips are allowed if using a tipping bucket sensor. eg: 10mm of rain per bottle, as 0.2mm per tip = 50.
 //add servomax and servo min angles here for easy configuration.
+short mintipcount = 2; // Used to provide a buffer in case of tiny rainfall amounts, morning dew, etc. 0 means it will start a new sample with even a single tip. 3 means it requires 3 tips to qualify as a new sample. 
 
 //*****************
 void setup() {
 //*****************
 //Setup serial output for monitoring.
  delay (3000); //wait 3 seconds for terminal to wake up.
-  Serial.begin(115200); //remove post debug
+//  Serial.begin(115200); //remove post debug
     Serial.println(F("MARS-02 activated."));
 
 //Setup tipping bucket sensor
-  (interruptsensor, INPUT_PULLUP);
+  pinMode(interruptsensor, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(interruptsensor), tipinterrupt, FALLING);
   tipcounter = 0;
 
@@ -188,6 +192,7 @@ monthDelta();
   waterSwitchPos(1);
   waterSwitchPos(4);
   waterSwitchPos(1);
+  waterSwitchPos(4);
      }
 
 // Record the day for the first sample.
@@ -237,8 +242,8 @@ void configure_wdt(void)
                                    // Put timer in interrupt-only mode:                                       
   WDTCSR |= 0b00011000;            // Set WDCE (5th from left) and WDE (4th from left) to enter config mode,
                                    // using bitwise OR assignment (leaves other bits unchanged).
-WDTCSR =  0b01000000 | 0b100001; // set WDIE: interrupt enabled (8 seconds)
-//  WDTCSR =  0b01000000 | 0b000000; // set WDIE: interrupt enabled (1 second)
+  WDTCSR =  0b01000000 | 0b100001; // set WDIE: interrupt enabled (8 seconds)
+  //  WDTCSR =  0b01000000 | 0b000000; // set WDIE: interrupt enabled (1 second)
                                    // clr WDE: reset disabled
                                    // and set delay interval (right side of bar) to 8 seconds
   sei();                           // re-enable interrupts 
@@ -267,6 +272,10 @@ void sleep(int sleepcycles) {
   // watchdog is configured for resume rather than restart 
   // When awake, disable sleep mode
   sleep_disable();
+    if (BucketTipped == true){
+      tipcounter++;
+      BucketTipped = false;
+    }
   sleepcycles--;
   }
  // put everything on again
@@ -276,18 +285,18 @@ void sleep(int sleepcycles) {
 //****Tipping bucket counter
 //counter that the tipping bucket can increment using interrupts.
 void tipinterrupt(){
-static unsigned long last_interrupt_time = 0;
-  unsigned long interrupt_time = millis();
-  if (interrupt_time - last_interrupt_time > debounceInterval){ //declare the debounce/block out interval in setup
-  tipcounter++;
-  }
-  last_interrupt_time = interrupt_time;
+//static unsigned long last_interrupt_time = 0;
+    //if ((long)(micros() - last_micros) >= debounceInterval){
+    BucketTipped = true;
+    //last_micros = micros();
+    //}
 }
 
 void tippingSensorCheck(){
   if (tips != tipcounter){
     Serial.print(F("Tipcounter tips: "));
     Serial.println (tipcounter);
+    //Serial.println(last_micros);
     tips = tipcounter;
   }
 }
@@ -489,9 +498,12 @@ void waterSwitchPos(int x){
 //Main Loop
 //*********************
 void loop() {
-  //tippingSensorCheck(); //used to check the tipping bucket sensor. Comment out after debug. Posts tipcount to serial. 
+  delay (50);
+  tippingSensorCheck(); //used to check the tipping bucket sensor. Comment out after debug. Posts tipcount to serial. 
+  delay (50);
   // put your main code here, to run repeatedly:
   // add in here a way to change date via console.
+     /* removed 15/9/19
      int minutes = Serial.parseInt();
      if (minutes > 0 && minutes < 60){
           tipcounter = tipcounter + 50;
@@ -540,7 +552,7 @@ void loop() {
      Serial.print(timestamp.second(), DEC);
      Serial.println(F("\t(DD/MM/YY HH:MM:SS)"));
      }
-
+    */
   //Program structure 
   //if startday > 25 (allow some slop in the beggining of the month - done in setup using monthfuzziness variable)
 
@@ -562,7 +574,7 @@ void loop() {
     //record log that month and sample ID has changed.
     }
   
-  if (checktime() && tipcounter == 0){ //New day, but no tips counted.
+  if (checktime() && tipcounter <= mintipcount){ //New day, but no tips counted. //changed 14/9/19 from == 0 to <= mintipcount
       Samplelog(sampleCounter);//record the sample details but do nothing else. No need for new sample.
       activeDay = currentDay();//Including this prevents the double sample that occurs after multiple days of no rainfall.
       Serial.println(F("Nothing happened today"));
@@ -592,6 +604,8 @@ void loop() {
   tipcounter = 0; //reset tipcounter
   }
   }
-  sleep(75); // sleep for 10 minutes.
+  //sleep(75); // sleep for 10 minutes.
+  //annoying quirk, but sleep needs to be enabled for the tipping sensor to work. Trying to count in the sensor ISR fails if using sleep.
+  sleep(4); //sleep for 8 seconds
+  //Serial.println("Waking up.");
 }
-
