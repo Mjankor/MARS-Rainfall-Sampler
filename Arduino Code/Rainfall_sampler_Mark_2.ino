@@ -163,7 +163,7 @@ monthDelta();
      Serial.print(Timestamp.month(), DEC);
      Serial.print("/");
      Serial.print(Timestamp.year(), DEC);
-     Serial.print("\t");     
+     Serial.print(" ");     
      Serial.print(Timestamp.hour(), DEC);
      Serial.print(":");
      Serial.print(Timestamp.minute(), DEC);
@@ -187,7 +187,7 @@ monthDelta();
      Logfile.println("Sample ID\tWater Switch Position\tCollection start date&time\tCollection end date&time\tTipping count\tAverage Temperature\tAverage Humidity");
      Logfile.close();
      } else {
-  // We need a way to alert to SD card errors. What we'll do is toggle the servo 3 times if the SD card doesn't work
+  // We need a way to alert to SD card errors. What we'll do is toggle the water switch 3 times if the SD card doesn't work
   waterSwitchPos(4);
   waterSwitchPos(1);
   waterSwitchPos(4);
@@ -208,7 +208,7 @@ monthDelta();
      format (Timestamp.month());
      Logfile.print("/");
      format (Timestamp.year());
-     Logfile.print("\t");     
+     Logfile.print(" ");     
      format (Timestamp.hour());
      Logfile.print(":");
      format (Timestamp.minute());
@@ -460,10 +460,10 @@ position = 2;
 if (sampleCounter > 33 && monthDelta() == 1 ){
 position = 3;
 }
-if (sampleCounter <= 33 && monthDelta()== 2 ){ //must update sample ID as well.
-position = 4;
+if (sampleCounter <= 33 && monthDelta() >= 2 ){ //must update sample ID as well. //Note: This is the likely cause of the bug. If waterSwitchCheck doesn't qualify for any of these, it probably returns 0
+position = 4; // further update. It seems to return 1, but I'm not sure if that is a proper int 1, or just a 1 that serial.print generates from something like an NA.
 }
-if (sampleCounter > 33 && monthDelta()== 2 ){
+if (sampleCounter > 33 && monthDelta() >= 2 ){
 position = 4;
 }
   Serial.print(F("WaterSwitchPos = "));
